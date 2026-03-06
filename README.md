@@ -234,8 +234,8 @@ timedatectl status  # Verify "NTP synchronized: yes"
 
 ```bash
 # Clone the repository
-git clone <repo> ~/hyperliquid-bot
-cd ~/hyperliquid-bot
+git clone <repo> ~/tradingbot
+cd ~/tradingbot
 
 # Create virtual environment
 python3.12 -m venv .venv
@@ -264,7 +264,7 @@ CONFIRM_MAINNET=
 #### 4. Test Connectivity
 
 ```bash
-cd ~/hyperliquid-bot
+cd ~/tradingbot
 source .venv/bin/activate
 
 # Test exchange connection
@@ -294,7 +294,7 @@ asyncio.run(test())
 
 ```bash
 # Use the install script (handles everything)
-cd ~/hyperliquid-bot
+cd ~/tradingbot
 sudo bash systemd/install.sh
 
 # Or install manually:
@@ -322,7 +322,7 @@ After verifying the bot works correctly on testnet:
 
 ```bash
 # Edit .env
-nano ~/hyperliquid-bot/.env
+nano ~/tradingbot/.env
 # Set: NETWORK=mainnet
 # Set: CONFIRM_MAINNET=true  (required safety check)
 
@@ -346,14 +346,14 @@ sudo journalctl -u trading-bot -p err
 
 #### Database Backups
 
-The install script sets up automatic daily backups at 3:00 AM UTC, keeping the last 7 days. Backups are stored in `~/hyperliquid-bot/storage/backups/`.
+The install script sets up automatic daily backups at 3:00 AM UTC, keeping the last 7 days. Backups are stored in `~/tradingbot/storage/backups/`.
 
 ```bash
 # Create backup directory if not exists
-mkdir -p ~/hyperliquid-bot/storage/backups
+mkdir -p ~/tradingbot/storage/backups
 
 # Manual backup
-cp ~/hyperliquid-bot/trading_bot.db ~/hyperliquid-bot/storage/backups/trading_bot_$(date +%Y%m%d_%H%M).db
+cp ~/tradingbot/trading_bot.db ~/tradingbot/storage/backups/trading_bot_$(date +%Y%m%d_%H%M).db
 
 # Verify cron backup is set
 crontab -l
@@ -362,7 +362,7 @@ crontab -l
 #### Updating the Bot
 
 ```bash
-cd ~/hyperliquid-bot
+cd ~/tradingbot
 git pull origin main
 source .venv/bin/activate
 pip install -e ".[linux]"
@@ -382,10 +382,10 @@ The bot has built-in health monitoring:
 
 ```bash
 # Restrict .env file permissions
-chmod 600 ~/hyperliquid-bot/.env
+chmod 600 ~/tradingbot/.env
 
 # Ensure only trading user can access the bot directory
-chmod 700 ~/hyperliquid-bot
+chmod 700 ~/tradingbot
 
 # Setup automatic security updates
 sudo apt install -y unattended-upgrades

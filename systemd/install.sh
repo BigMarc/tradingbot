@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-INSTALL_DIR="/home/trading/hyperliquid-bot"
+INSTALL_DIR="/home/trading/tradingbot"
 SERVICE_NAME="trading-bot"
 USER_NAME="trading"
 
