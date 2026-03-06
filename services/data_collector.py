@@ -21,6 +21,10 @@ class DataCollector:
     def set_health_monitor(self, health_monitor) -> None:
         self._health_monitor = health_monitor
 
+    def _heartbeat(self) -> None:
+        if self._health_monitor:
+            self._health_monitor.heartbeat("data_collector")
+
     async def start(self) -> None:
         self._running = True
         logger.info("DataCollector starting...")
@@ -51,6 +55,7 @@ class DataCollector:
                 await asyncio.sleep(30)
                 continue
             try:
+                self._heartbeat()
                 await self.market_data.start()
             except Exception as e:
                 logger.error("WebSocket feed error: {}", e)
@@ -70,6 +75,7 @@ class DataCollector:
                 if self._health_monitor and self._health_monitor.is_maintenance_mode:
                     logger.debug("Maintenance mode, skipping REST fetch")
                     continue
+                self._heartbeat()
                 data = await self.market_data.fetch_rest_data()
                 logger.debug("REST data fetched for {} tokens", len(data))
             except asyncio.CancelledError:

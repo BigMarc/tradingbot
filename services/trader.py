@@ -38,9 +38,13 @@ class Trader:
         self._paused = False
         self._bankroll: float = 0
         self._telegram = None  # Set via set_telegram()
+        self._health_monitor = None
 
     def set_telegram(self, telegram_bot) -> None:
         self._telegram = telegram_bot
+
+    def set_health_monitor(self, health_monitor) -> None:
+        self._health_monitor = health_monitor
 
     @property
     def is_paused(self) -> bool:
@@ -91,6 +95,8 @@ class Trader:
 
         while self._running:
             try:
+                if self._health_monitor:
+                    self._health_monitor.heartbeat("trader")
                 if not self._paused:
                     await self._process_signals()
             except asyncio.CancelledError:

@@ -61,6 +61,7 @@ class HealthMonitor:
             await asyncio.sleep(60)
             if not self._running:
                 break
+            self._last_heartbeat["health_monitor"] = time.time()
             await self._check_health()
             await self._check_maintenance_mode()
             await self._check_clock_drift()
@@ -85,6 +86,9 @@ class HealthMonitor:
 
         # Check heartbeats (allow 5 minutes of silence)
         for name, last in self._last_heartbeat.items():
+            task = self._tasks.get(name)
+            if task and task.done():
+                continue  # Skip heartbeat check for finished tasks
             if now - last > 300:
                 issues.append(f"{name}: no heartbeat for {(now - last) / 60:.0f}min")
 
