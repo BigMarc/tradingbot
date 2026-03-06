@@ -26,7 +26,7 @@ tests/           - Unit tests for indicators, signals, risk management
 
 ```bash
 # 1. Clone and configure
-git clone <repo> ~/tradingbot && cd ~/tradingbot
+git clone https://github.com/BigMarc/tradingbot && cd ~/hyperliquid-bot
 cp .env.example .env   # or edit .env directly
 nano .env              # Fill in your credentials
 
@@ -57,8 +57,8 @@ Windows does not support `uvloop` (Linux-only). The bot handles this gracefully 
 # 1. Install Python 3.12+ from python.org (check "Add to PATH")
 
 # 2. Clone the repo
-git clone <repo> C:\tradingbot
-cd C:\tradingbot
+git clone https://github.com/BigMarc/tradingbot/
+cd C:\hyperliquid-bot
 
 # 3. Create virtual environment
 python -m venv .venv
