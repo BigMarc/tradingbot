@@ -1,0 +1,8 @@
+# Blacklisted tokens - these will never be traded
+blacklist:
+  - "USDT"
+  - "USDC"
+  - "DAI"
+  - "BUSD"
+  - "TUSD"
+  - "FRAX"

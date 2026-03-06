@@ -1,0 +1,29 @@
+[Unit]
+Description=Hyperliquid Trading Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=trading
+Group=trading
+WorkingDirectory=/home/trading/hyperliquid-bot
+EnvironmentFile=/home/trading/hyperliquid-bot/.env
+ExecStart=/home/trading/hyperliquid-bot/.venv/bin/python main.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=trading-bot
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/home/trading/hyperliquid-bot
+
+# Resource limits
+LimitNOFILE=65536
+MemoryMax=2G
+
+[Install]
+WantedBy=multi-user.target

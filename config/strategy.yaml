@@ -1,0 +1,78 @@
+universe:
+  min_24h_volume_usd: 1000000
+  max_spread_pct: 0.15
+  exclude_stablecoins: true
+
+signal:
+  min_score: 65
+  check_interval_seconds: 30
+
+  weights:
+    momentum: 30
+    trend: 30
+    mean_reversion: 20
+    volume: 20
+
+  momentum:
+    lookback_periods: [15, 60, 240]  # minutes
+
+  trend:
+    ema_periods: [9, 21, 50]
+    macd: [12, 26, 9]
+
+  mean_reversion:
+    rsi_period: 14
+    rsi_oversold: 30
+    rsi_overbought: 70
+    bb_period: 20
+    bb_std: 2.0
+
+  volume:
+    ratio_threshold: 1.5
+    lookback_periods: 20
+
+trading:
+  max_positions: 2
+  max_leverage: 5
+  default_leverage: 3
+  max_position_size_pct: 5.0
+  default_position_size_pct: 3.0
+
+  trailing_stop:
+    breakeven_trigger_pct: 1.0
+    tiers:
+      - { profit_pct: 2.0, trail_pct: 40 }
+      - { profit_pct: 3.0, trail_pct: 50 }
+      - { profit_pct: 5.0, trail_pct: 60 }
+      - { profit_pct: 8.0, trail_pct: 70 }
+
+  take_profit:
+    targets:
+      - { pct: 2.0, close_pct: 50 }
+      - { pct: 4.0, close_pct: 30 }
+
+  cooldown:
+    after_close_minutes: 5
+    after_stoploss_minutes: 15
+    after_3_losses_minutes: 60
+
+  zombie_protection:
+    max_hold_minutes: 180
+    min_profit_for_hold_pct: 0.5
+    force_close_multiplier: 2
+
+risk:
+  max_daily_loss_pct: 8.0
+  max_total_drawdown_pct: 20.0
+  min_bankroll_usd: 100
+  max_same_direction_positions: 2
+
+optimizer:
+  interval_hours: 4
+  min_trades_for_analysis: 10
+
+ai:
+  model: "claude-sonnet-4-6"
+  max_tokens: 500
+  temperature: 0.3
+  timeout_seconds: 30
