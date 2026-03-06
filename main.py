@@ -75,6 +75,7 @@ async def main() -> None:
 
     # Wire up telegram with components
     telegram_bot.set_components(trader, optimizer, risk_manager, position_manager, db)
+    trader.set_telegram(telegram_bot)
     health_monitor.set_telegram(telegram_bot)
 
     # 5. Setup graceful shutdown

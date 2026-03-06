@@ -101,6 +101,12 @@ PORTFOLIO STATUS:
 - Heutige Performance: {format_pct(today_pnl_pct)} ({wins}W/{losses}L)
 - Letzte 3 Trades: {recent_summary}
 
+FUNDING ANALYSE:
+- Aktuelle 8h Funding Rate: {indicators.get('funding_rate', 0):.4f}%
+- Annualisiert: {indicators.get('funding_annualized_pct', 0):.1f}%
+- Einordnung: {indicators.get('funding_label', 'NEUTRAL')}
+- Funding-Modifier auf Signal Score: {indicators.get('funding_modifier', 0):+.0f} Punkte
+
 MARKT-KONTEXT:
 - BTC 1h Trend: {btc_trend}
 - Top 3 Movers (1h): {top_movers_str}

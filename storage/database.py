@@ -95,6 +95,15 @@ CREATE TABLE IF NOT EXISTS api_costs (
     output_tokens INTEGER DEFAULT 0,
     cost_usd REAL DEFAULT 0
 );
+
+CREATE TABLE IF NOT EXISTS funding_rates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp REAL NOT NULL,
+    token TEXT NOT NULL,
+    rate REAL NOT NULL,
+    annualized_pct REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_funding_token_time ON funding_rates(token, timestamp);
 """
 
 CLEANUP_SQL = """
@@ -281,13 +290,39 @@ class Database:
         row = await cursor.fetchone()
         return row["total"]  # type: ignore
 
+    # ── Funding Rates ────────────────────────────────────────
+
+    async def insert_funding_rate(self, token: str, rate: float, annualized_pct: float) -> None:
+        await self.db.execute(
+            "INSERT INTO funding_rates (timestamp, token, rate, annualized_pct) VALUES (?, ?, ?, ?)",
+            (time.time(), token, rate, annualized_pct),
+        )
+        await self.db.commit()
+
+    async def insert_funding_rates_batch(self, rates: list[tuple]) -> None:
+        await self.db.executemany(
+            "INSERT INTO funding_rates (timestamp, token, rate, annualized_pct) VALUES (?, ?, ?, ?)",
+            rates,
+        )
+        await self.db.commit()
+
+    async def get_latest_funding_rate(self, token: str) -> dict | None:
+        cursor = await self.db.execute(
+            "SELECT * FROM funding_rates WHERE token = ? ORDER BY timestamp DESC LIMIT 1",
+            (token,),
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+
     # ── Cleanup ──────────────────────────────────────────────
 
     async def cleanup_old_data(self) -> None:
         now = time.time()
         tick_cutoff = now - 48 * 3600      # 48h
         candle_cutoff = now - 7 * 86400    # 7 days
+        funding_cutoff = now - 7 * 86400  # 7 days
         await self.db.execute("DELETE FROM price_ticks WHERE timestamp < ?", (tick_cutoff,))
         await self.db.execute("DELETE FROM candles WHERE timeframe = '1m' AND timestamp < ?", (candle_cutoff,))
+        await self.db.execute("DELETE FROM funding_rates WHERE timestamp < ?", (funding_cutoff,))
         await self.db.commit()
-        logger.debug("Cleaned up old price ticks and 1m candles")
+        logger.debug("Cleaned up old price ticks, 1m candles, and funding rates")

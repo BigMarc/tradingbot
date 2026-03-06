@@ -31,6 +31,16 @@ signal:
     ratio_threshold: 1.5
     lookback_periods: 20
 
+  funding_rate:
+    enabled: true
+    moderate_threshold: 15.0         # < 15% annual = no effect
+    extreme_threshold: 50.0          # > 50% annual = extreme zone
+    extreme_block_threshold: 100.0   # > 100% annual = block signal
+    contrarian_bonus: 8              # points bonus for moderate contrarian
+    contrarian_bonus_extreme: 15     # points bonus for extreme contrarian
+    crowded_penalty: 10              # points penalty for moderate crowded
+    crowded_penalty_extreme: 20      # points penalty for extreme crowded
+
 trading:
   max_positions: 2
   max_leverage: 5
@@ -62,10 +72,29 @@ trading:
     force_close_multiplier: 2
 
 risk:
-  max_daily_loss_pct: 8.0
+  drawdown_shield:
+    enabled: true
+    tiers:
+      - { drawdown_pct: -3.0, size_multiplier: 1.0 }    # Normal
+      - { drawdown_pct: -5.0, size_multiplier: 0.5 }    # Half size
+      - { drawdown_pct: -7.0, size_multiplier: 0.25 }   # Quarter size
+      - { drawdown_pct: -8.0, size_multiplier: 0.0 }    # Full pause
+    pause_duration_hours: 4
+    reset_time_utc: "00:00"
   max_total_drawdown_pct: 20.0
   min_bankroll_usd: 100
   max_same_direction_positions: 2
+
+  overtrading:
+    enabled: true
+    max_trades_per_hour: 6
+    cooldown_minutes: 30
+
+  chop_market:
+    enabled: true
+    lookback_trades: 10
+    stoploss_rate_threshold: 0.6     # 60% stop losses = chop
+    cooldown_minutes: 45
 
 optimizer:
   interval_hours: 4

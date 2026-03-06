@@ -191,18 +191,40 @@ class MarketData:
     async def fetch_rest_data(self) -> dict[str, dict]:
         """Fetch supplementary data via REST (funding rates, etc.)."""
         result = {}
+        funding_batch = []
+        now = time.time()
+
         for token in self._subscribed_tokens[:20]:
             symbol = f"{token}/USDC:USDC"
             try:
                 funding = await self.exchange.fetch_funding_rate(symbol)
                 ticker = await self.exchange.fetch_ticker(symbol)
+                funding_rate = funding.get("fundingRate", 0)
+                if funding_rate is None:
+                    funding_rate = 0
+
+                # Hyperliquid funds every 8h (3x per day)
+                annualized_pct = funding_rate * 3 * 365 * 100
+
                 result[token] = {
-                    "funding_rate": funding.get("fundingRate", 0),
+                    "funding_rate": funding_rate,
+                    "funding_annualized_pct": annualized_pct,
                     "volume_24h": ticker.get("quoteVolume", 0),
                     "last_price": ticker.get("last", 0),
                     "bid": ticker.get("bid", 0),
                     "ask": ticker.get("ask", 0),
                 }
+
+                funding_batch.append((now, token, funding_rate, annualized_pct))
             except Exception as e:
                 logger.debug("Failed to fetch REST data for {}: {}", token, e)
+
+        # Store funding rates in DB
+        if funding_batch:
+            try:
+                await self.db.insert_funding_rates_batch(funding_batch)
+                logger.debug("Stored funding rates for {} tokens", len(funding_batch))
+            except Exception as e:
+                logger.warning("Failed to store funding rates: {}", e)
+
         return result
