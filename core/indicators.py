@@ -89,8 +89,9 @@ def compute_indicators(candles: list[dict], strategy_config: dict) -> dict:
         if lower_col and upper_col:
             lower = float(bbands[lower_col[0]].iloc[-1]) if not pd.isna(bbands[lower_col[0]].iloc[-1]) else price
             upper = float(bbands[upper_col[0]].iloc[-1]) if not pd.isna(bbands[upper_col[0]].iloc[-1]) else price
-            if upper != lower:
-                result["bb_position"] = (price - lower) / (upper - lower)
+            if upper > lower and np.isfinite(upper) and np.isfinite(lower):
+                bb_pos = (price - lower) / (upper - lower)
+                result["bb_position"] = max(0.0, min(1.0, bb_pos))
             else:
                 result["bb_position"] = 0.5
             result["bb_upper"] = upper

@@ -202,11 +202,17 @@ class AIBrain:
         # Try to extract JSON from the response
         try:
             # Handle cases where AI might wrap in markdown code blocks
-            if text.startswith("```"):
-                text = text.split("```")[1]
-                if text.startswith("json"):
-                    text = text[4:]
-                text = text.strip()
+            if "```" in text:
+                parts = text.split("```")
+                # Take the first code block content
+                if len(parts) >= 3:
+                    code_block = parts[1]
+                else:
+                    code_block = parts[1] if len(parts) > 1 else text
+                code_block = code_block.strip()
+                if code_block.startswith("json"):
+                    code_block = code_block[4:]
+                text = code_block.strip()
 
             decision = orjson.loads(text)
         except Exception:
@@ -224,15 +230,39 @@ class AIBrain:
             return decision
 
         # Enforce hard limits
-        leverage = min(decision.get("leverage", 3), 5)
-        size_pct = min(decision.get("position_size_pct", 3.0), 5.0)
+        leverage = decision.get("leverage", 3)
+        if not isinstance(leverage, (int, float)) or leverage < 1:
+            logger.warning("AI Brain returned invalid leverage: {}, defaulting to 3", leverage)
+            leverage = 3
+        leverage = int(min(leverage, 5))
+
+        size_pct = decision.get("position_size_pct", 3.0)
+        if not isinstance(size_pct, (int, float)) or size_pct <= 0:
+            logger.warning("AI Brain returned invalid size: {}, defaulting to 3.0", size_pct)
+            size_pct = 3.0
+        size_pct = min(float(size_pct), 5.0)
+
         decision["leverage"] = leverage
         decision["position_size_pct"] = size_pct
 
-        if "stop_loss_pct" not in decision or decision["stop_loss_pct"] <= 0:
-            logger.warning("AI Brain omitted stop_loss, forcing SKIP")
+        if "stop_loss_pct" not in decision or not isinstance(decision["stop_loss_pct"], (int, float)) or decision["stop_loss_pct"] <= 0:
+            logger.warning("AI Brain omitted or invalid stop_loss, forcing SKIP")
             decision["action"] = "SKIP"
             return decision
+
+        # Validate take_profit_targets
+        tp_targets = decision.get("take_profit_targets", [])
+        if not isinstance(tp_targets, list) or len(tp_targets) == 0:
+            logger.warning("AI Brain missing take_profit_targets, using defaults")
+            decision["take_profit_targets"] = [
+                {"pct": 2.0, "close_pct": 50},
+                {"pct": 4.0, "close_pct": 30},
+            ]
+
+        # Validate max_hold_minutes
+        max_hold = decision.get("max_hold_minutes", 180)
+        if not isinstance(max_hold, (int, float)) or max_hold <= 0:
+            decision["max_hold_minutes"] = 180
 
         logger.info(
             "AI Brain decision: {} {} | {}x | Size: {}% | SL: {}% | Reason: {}",

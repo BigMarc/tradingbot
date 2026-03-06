@@ -219,7 +219,9 @@ class Database:
         return [dict(r) for r in rows]
 
     async def get_today_trades(self) -> list[dict]:
-        day_start = time.time() - (time.time() % 86400)
+        from datetime import datetime, timezone
+        utc_now = datetime.now(timezone.utc)
+        day_start = utc_now.replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
         cursor = await self.db.execute(
             "SELECT * FROM trades WHERE status = 'closed' AND exit_time >= ? ORDER BY exit_time DESC",
             (day_start,),
@@ -283,7 +285,8 @@ class Database:
         await self.db.commit()
 
     async def get_today_api_costs(self) -> float:
-        day_start = time.time() - (time.time() % 86400)
+        from datetime import datetime, timezone
+        day_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
         cursor = await self.db.execute(
             "SELECT COALESCE(SUM(cost_usd), 0) as total FROM api_costs WHERE timestamp >= ?",
             (day_start,),
@@ -292,7 +295,8 @@ class Database:
         return row["total"]  # type: ignore
 
     async def get_today_trading_fees(self) -> float:
-        day_start = time.time() - (time.time() % 86400)
+        from datetime import datetime, timezone
+        day_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
         cursor = await self.db.execute(
             "SELECT COALESCE(SUM(fees), 0) as total FROM trades WHERE exit_time >= ? AND status = 'closed'",
             (day_start,),

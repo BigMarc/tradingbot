@@ -13,6 +13,7 @@ class RiskManager:
         self._stopped = False
         self._consecutive_losses = 0
         self._last_close_time: float = 0
+        self._last_loss_time: float = 0
         self._last_stoploss_time: float = 0
         # Drawdown shield state
         self._bankroll_at_day_start: float = 0
@@ -60,8 +61,9 @@ class RiskManager:
             return 0.0
 
         # Check for UTC day rollover
+        from datetime import datetime, timezone
         now = time.time()
-        day_start_ts = now - (now % 86400)
+        day_start_ts = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
         if self._last_day_reset < day_start_ts:
             self._bankroll_at_day_start = current_bankroll
             self._last_day_reset = now
@@ -251,8 +253,8 @@ class RiskManager:
         # Cooldown after 3 consecutive losses
         loss_cooldown = cooldown.get("after_3_losses_minutes", 60) * 60
         if self._consecutive_losses >= 3:
-            if now - self._last_close_time < loss_cooldown:
-                remaining = (self._last_close_time + loss_cooldown - now) / 60
+            if now - self._last_loss_time < loss_cooldown:
+                remaining = (self._last_loss_time + loss_cooldown - now) / 60
                 return False, f"3 losses cooldown: {remaining:.1f}min remaining"
             else:
                 self._consecutive_losses = 0
@@ -260,11 +262,13 @@ class RiskManager:
         return True, "OK"
 
     def record_trade_close(self, pnl_usd: float, exit_reason: str) -> None:
-        self._last_close_time = time.time()
+        now = time.time()
+        self._last_close_time = now
         if pnl_usd <= 0:
             self._consecutive_losses += 1
+            self._last_loss_time = now
             if "stop" in exit_reason.lower():
-                self._last_stoploss_time = time.time()
+                self._last_stoploss_time = now
         else:
             self._consecutive_losses = 0
 

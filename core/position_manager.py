@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import time
 from dataclasses import dataclass, field
 from config.settings import load_strategy
@@ -58,6 +59,7 @@ class PositionManager:
         self.risk_manager = risk_manager
         self.db = db
         self._positions: dict[int, ManagedPosition] = {}
+        self._check_lock = asyncio.Lock()
 
     def add_position(self, trade_id: int, token: str, direction: str, entry_price: float, leverage: int, size_usd: float, ai_decision: dict) -> None:
         pos = ManagedPosition(
@@ -84,42 +86,45 @@ class PositionManager:
 
     async def check_all_positions(self) -> list[dict]:
         """Check all managed positions and execute stops/TPs. Returns list of close actions taken."""
-        actions = []
-        strategy = load_strategy()
-        ts_config = strategy.get("trading", {}).get("trailing_stop", {})
-        zombie_config = strategy.get("trading", {}).get("zombie_protection", {})
+        async with self._check_lock:
+            actions = []
+            strategy = load_strategy()
+            ts_config = strategy.get("trading", {}).get("trailing_stop", {})
+            zombie_config = strategy.get("trading", {}).get("zombie_protection", {})
 
-        to_remove = []
+            to_remove = []
 
-        for trade_id, pos in self._positions.items():
-            mid = self.market_data.get_mid_price(pos.token)
-            if not mid:
-                continue
+            for trade_id, pos in self._positions.items():
+                mid = self.market_data.get_mid_price(pos.token)
+                if not mid:
+                    continue
 
-            pos.current_price = mid
-            pos.max_price = max(pos.max_price, mid)
-            pos.min_price = min(pos.min_price, mid)
+                pos.current_price = mid
+                pos.max_price = max(pos.max_price, mid)
+                pos.min_price = min(pos.min_price, mid)
 
-            action = await self._check_position(pos, ts_config, zombie_config)
-            if action:
-                actions.append(action)
-                if action.get("full_close"):
-                    to_remove.append(trade_id)
+                action = await self._check_position(pos, ts_config, zombie_config)
+                if action:
+                    actions.append(action)
+                    if action.get("full_close"):
+                        to_remove.append(trade_id)
 
-        for tid in to_remove:
-            del self._positions[tid]
+            for tid in to_remove:
+                del self._positions[tid]
 
-        return actions
+            return actions
 
     async def _check_position(self, pos: ManagedPosition, ts_config: dict, zombie_config: dict) -> dict | None:
         pnl = pos.pnl_pct
         max_pnl = pos.max_pnl_pct
 
+        remaining_usd = pos.size_usd * (pos.remaining_size_pct / 100)
+
         # 1. Check initial stop-loss
         if pnl <= -pos.ai_stop_loss_pct:
             result = await self.executor.close_position(
                 pos.token, pos.direction, pos.trade_id, pos.entry_price,
-                pos.leverage, pos.size_usd * (pos.remaining_size_pct / 100),
+                pos.leverage, remaining_usd,
                 100.0, "stop_loss",
             )
             if result:
@@ -147,7 +152,7 @@ class PositionManager:
             if pnl <= trail_stop_level:
                 result = await self.executor.close_position(
                     pos.token, pos.direction, pos.trade_id, pos.entry_price,
-                    pos.leverage, pos.size_usd * (pos.remaining_size_pct / 100),
+                    pos.leverage, remaining_usd,
                     100.0, "trailing_stop",
                 )
                 if result:
@@ -160,14 +165,17 @@ class PositionManager:
                 continue
             if pnl >= tp.get("pct", 999):
                 close_pct = tp.get("close_pct", 50)
+                # close_pct is relative to remaining position
+                # e.g. 50% of remaining, not 50% of original
                 result = await self.executor.close_position(
                     pos.token, pos.direction, pos.trade_id, pos.entry_price,
-                    pos.leverage, pos.size_usd * (pos.remaining_size_pct / 100),
+                    pos.leverage, remaining_usd,
                     close_pct, f"take_profit_{i+1}",
                 )
                 if result:
                     pos.tp_targets_hit.append(i)
-                    pos.remaining_size_pct -= close_pct * (pos.remaining_size_pct / 100)
+                    # Reduce remaining by the percentage of what was closed
+                    pos.remaining_size_pct *= (1 - close_pct / 100)
                     if pos.remaining_size_pct <= 1.0:
                         self.risk_manager.record_trade_close(result["pnl_usd"], f"take_profit_{i+1}")
                         return {**result, "full_close": True}
@@ -181,7 +189,7 @@ class PositionManager:
         if pos.hold_minutes > max_hold and pnl < min_profit:
             result = await self.executor.close_position(
                 pos.token, pos.direction, pos.trade_id, pos.entry_price,
-                pos.leverage, pos.size_usd * (pos.remaining_size_pct / 100),
+                pos.leverage, remaining_usd,
                 100.0, "zombie_close",
             )
             if result:
@@ -191,7 +199,7 @@ class PositionManager:
         if pos.hold_minutes > max_hold * force_mult:
             result = await self.executor.close_position(
                 pos.token, pos.direction, pos.trade_id, pos.entry_price,
-                pos.leverage, pos.size_usd * (pos.remaining_size_pct / 100),
+                pos.leverage, remaining_usd,
                 100.0, "force_close",
             )
             if result:
