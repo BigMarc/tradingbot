@@ -40,6 +40,7 @@ class DataCollector:
             self._run_rest_fetcher(),
             self._run_token_updater(),
             self._run_cleanup(),
+            self._run_heartbeat(),
         )
 
     async def stop(self) -> None:
@@ -55,7 +56,6 @@ class DataCollector:
                 await asyncio.sleep(30)
                 continue
             try:
-                self._heartbeat()
                 await self.market_data.start()
             except Exception as e:
                 logger.error("WebSocket feed error: {}", e)
@@ -75,7 +75,6 @@ class DataCollector:
                 if self._health_monitor and self._health_monitor.is_maintenance_mode:
                     logger.debug("Maintenance mode, skipping REST fetch")
                     continue
-                self._heartbeat()
                 data = await self.market_data.fetch_rest_data()
                 logger.debug("REST data fetched for {} tokens", len(data))
             except asyncio.CancelledError:
@@ -98,6 +97,15 @@ class DataCollector:
                 break
             except Exception as e:
                 logger.error("Token updater error: {}", e)
+
+    async def _run_heartbeat(self) -> None:
+        """Send periodic heartbeat so health monitor knows we're alive."""
+        while self._running:
+            try:
+                self._heartbeat()
+                await asyncio.sleep(60)
+            except asyncio.CancelledError:
+                break
 
     async def _run_cleanup(self) -> None:
         """Clean up old data periodically (every 6 hours)."""
