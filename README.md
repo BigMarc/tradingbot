@@ -26,7 +26,7 @@ tests/           - Unit tests for indicators, signals, risk management
 
 ```bash
 # 1. Clone and configure
-git clone <repo> ~/hyperliquid-bot && cd ~/hyperliquid-bot
+git clone https://github.com/BigMarc/tradingbot && cd ~/hyperliquid-bot
 cp .env.example .env   # or edit .env directly
 nano .env              # Fill in your credentials
 
