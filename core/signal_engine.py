@@ -126,7 +126,8 @@ class SignalEngine:
             return []
 
         signals: list[SignalEvent] = []
-        tokens = self.exchange.get_tradeable_tokens()
+        # Only scan tokens with REST data (subscribed, max ~20) instead of all 200+
+        tokens = list(self._rest_data.keys()) if self._rest_data else self.exchange.get_tradeable_tokens()
 
         for token in tokens:
             # Blacklist check
@@ -219,19 +220,60 @@ class SignalEngine:
         return signals
 
     def get_btc_trend(self) -> str:
-        """Get BTC 1h trend based on mid prices."""
-        mid = self.market_data.get_mid_price("BTC")
-        if not mid:
+        """Get BTC 1h trend from REST data."""
+        btc_data = self._rest_data.get("BTC", {})
+        if not btc_data:
             return "UNKNOWN"
+        # Use funding rate as a proxy for market bias
+        funding = btc_data.get("funding_rate", 0) or 0
+        bid = btc_data.get("bid", 0)
+        ask = btc_data.get("ask", 0)
+        last = btc_data.get("last_price", 0)
+        if not last:
+            return "UNKNOWN"
+        # Simple trend from bid/ask position
+        if bid and ask:
+            mid = (bid + ask) / 2
+            spread_bias = (last - mid) / mid * 100 if mid else 0
+            if spread_bias > 0.02 and funding > 0:
+                return "BULLISH"
+            elif spread_bias < -0.02 and funding < 0:
+                return "BEARISH"
         return "NEUTRAL"
 
     def get_market_sentiment(self) -> str:
-        """Simple market sentiment from available tokens."""
-        prices = self.market_data.mid_prices
-        if len(prices) < 5:
+        """Derive market sentiment from funding rates across tokens."""
+        if not self._rest_data:
             return "UNKNOWN"
+        positive = 0
+        negative = 0
+        for token, data in self._rest_data.items():
+            fr = data.get("funding_rate", 0) or 0
+            if fr > 0:
+                positive += 1
+            elif fr < 0:
+                negative += 1
+        total = positive + negative
+        if total < 3:
+            return "UNKNOWN"
+        ratio = positive / total
+        if ratio > 0.7:
+            return "GREEDY"
+        elif ratio < 0.3:
+            return "FEARFUL"
         return "NEUTRAL"
 
     def get_top_movers(self) -> list[dict]:
-        """Get top 3 movers by momentum."""
-        return []
+        """Get top 3 movers by absolute price change from REST data."""
+        movers = []
+        for token, data in self._rest_data.items():
+            last = data.get("last_price", 0)
+            if not last:
+                continue
+            # Use mid price from websocket as comparison if available
+            mid = self.market_data.get_mid_price(token)
+            if mid and mid > 0:
+                change = ((last - mid) / mid) * 100
+                movers.append({"token": token, "change": change})
+        movers.sort(key=lambda m: abs(m["change"]), reverse=True)
+        return movers[:3]

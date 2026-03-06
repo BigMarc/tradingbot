@@ -103,11 +103,13 @@ class MarketData:
         mids = data.get("mids", {})
         now = time.time()
         ticks = []
+        subscribed = set(self._subscribed_tokens)
         for token, mid_str in mids.items():
             mid = float(mid_str)
-            self._mid_prices[token] = mid
-            ticks.append((now, token, None, None, mid, 0))
-            self._update_candle_buffer(token, mid, now)
+            self._mid_prices[token] = mid  # Keep all mid prices in memory (free)
+            if token in subscribed:  # Only persist subscribed tokens to DB
+                ticks.append((now, token, None, None, mid, 0))
+                self._update_candle_buffer(token, mid, now)
 
         if ticks:
             await self.db.insert_ticks_batch(ticks)

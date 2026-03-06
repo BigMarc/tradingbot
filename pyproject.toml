@@ -16,10 +16,12 @@ dependencies = [
     "pydantic-settings>=2.5.0",
     "pyyaml>=6.0",
     "loguru>=0.7.0",
-    "uvloop>=0.21.0",
     "tenacity>=9.0.0",
     "schedule>=1.2.0",
 ]
+
+[project.optional-dependencies]
+linux = ["uvloop>=0.21.0"]
 
 [project.scripts]
 trading-bot = "main:main_entry"

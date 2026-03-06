@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import time
 import orjson
 import anthropic
@@ -116,7 +117,7 @@ MARKT-KONTEXT:
 class AIBrain:
     def __init__(self, db: Database) -> None:
         self.db = db
-        self.client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        self.client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
         self._telegram = None
 
     def set_telegram(self, telegram_bot) -> None:
@@ -147,7 +148,7 @@ class AIBrain:
 
         start_time = time.time()
         try:
-            response = self.client.messages.create(
+            response = await self.client.messages.create(
                 model=model,
                 max_tokens=max_tokens,
                 temperature=temperature,
@@ -277,7 +278,7 @@ Schlage Anpassungen vor oder antworte 'NO_CHANGES'."""
 
         start_time = time.time()
         try:
-            response = self.client.messages.create(
+            response = await self.client.messages.create(
                 model=model,
                 max_tokens=800,
                 temperature=0.3,

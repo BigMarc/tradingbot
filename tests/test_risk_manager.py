@@ -90,7 +90,8 @@ class TestRiskManager:
     async def test_check_limits_ok(self):
         rm = self._make_rm()
         rm.set_bankroll_at_day_start(1000.0)
-        result = await rm.check_limits(900.0)
+        # -2% daily drawdown, within safe zone (above -3% threshold)
+        result = await rm.check_limits(980.0)
         assert result["ok"]
 
     @pytest.mark.asyncio
@@ -128,24 +129,27 @@ class TestDrawdownShield:
 
     def test_multiplier_half_size(self):
         rm = self._make_rm()
-        mult, tier = rm.get_position_size_multiplier(-5.5)
+        # At -4%, crossed -3% tier -> half size
+        mult, tier = rm.get_position_size_multiplier(-4.0)
         assert mult == 0.5
 
     def test_multiplier_quarter_size(self):
         rm = self._make_rm()
-        mult, tier = rm.get_position_size_multiplier(-7.5)
+        # At -5.5%, crossed -5% tier -> quarter size
+        mult, tier = rm.get_position_size_multiplier(-5.5)
         assert mult == 0.25
 
     def test_multiplier_full_pause(self):
         rm = self._make_rm()
-        mult, tier = rm.get_position_size_multiplier(-9.0)
+        # At -8%, crossed -7% tier -> full pause
+        mult, tier = rm.get_position_size_multiplier(-8.0)
         assert mult == 0.0
 
     def test_multiplier_at_boundary(self):
         rm = self._make_rm()
-        # Exactly at -3.0 should trigger the tier
+        # Exactly at -3.0 should trigger the half-size tier
         mult, tier = rm.get_position_size_multiplier(-3.0)
-        assert mult == 1.0
+        assert mult == 0.5
 
     def test_multiplier_positive_pnl(self):
         rm = self._make_rm()

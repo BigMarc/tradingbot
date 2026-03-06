@@ -60,9 +60,11 @@ def compute_indicators(candles: list[dict], strategy_config: dict) -> dict:
     macd_params = strategy_config.get("trend", {}).get("macd", [12, 26, 9])
     macd_result = ta.macd(df["close"], fast=macd_params[0], slow=macd_params[1], signal=macd_params[2])
     if macd_result is not None and len(macd_result) > 0:
-        hist_col = [c for c in macd_result.columns if "h" in c.lower()]
-        signal_col = [c for c in macd_result.columns if "s" in c.lower()]
-        macd_col = [c for c in macd_result.columns if c not in hist_col and c not in signal_col]
+        hist_col = [c for c in macd_result.columns if c.lower().startswith("macdh")]
+        signal_col = [c for c in macd_result.columns if c.lower().startswith("macds")]
+        macd_col = [c for c in macd_result.columns if c.lower().startswith("macd_") or c.lower() == "macd"]
+        if not macd_col:
+            macd_col = [c for c in macd_result.columns if c not in hist_col and c not in signal_col]
 
         if hist_col:
             val = macd_result[hist_col[0]].iloc[-1]
