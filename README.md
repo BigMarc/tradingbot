@@ -57,7 +57,7 @@ Windows does not support `uvloop` (Linux-only). The bot handles this gracefully 
 # 1. Install Python 3.12+ from python.org (check "Add to PATH")
 
 # 2. Clone the repo
-git clone <repo> C:\hyperliquid-bot
+git clone https://github.com/BigMarc/tradingbot/
 cd C:\hyperliquid-bot
 
 # 3. Create virtual environment
