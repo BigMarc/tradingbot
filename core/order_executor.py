@@ -29,7 +29,8 @@ class OrderExecutor:
             # Set leverage
             await self.exchange.set_leverage(leverage, symbol)
         except Exception as e:
-            logger.warning("Failed to set leverage for {}: {}", symbol, e)
+            logger.error("Failed to set leverage for {}: {} — aborting order", symbol, e)
+            return None
 
         # Get current price for sizing
         try:
@@ -63,6 +64,19 @@ class OrderExecutor:
         except Exception as e:
             logger.error("Failed to place {} order for {}: {}", entry_type, symbol, e)
             return None
+
+        # Check for partial fills
+        filled = order.get("filled", amount)
+        order_status = order.get("status", "")
+        if order_status == "canceled" or (filled is not None and filled <= 0):
+            logger.error("Order for {} was not filled (status: {})", token, order_status)
+            return None
+
+        if filled is not None and filled < amount * 0.95:
+            logger.warning("Partial fill for {}: requested={}, filled={}", token, amount, filled)
+            # Adjust size_usd to match actual fill
+            size_usd = filled * current_price
+            amount = filled
 
         fill_price = order.get("average", order.get("price", current_price))
         fees = order.get("fee", {}).get("cost", 0) or 0

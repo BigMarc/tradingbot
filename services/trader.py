@@ -62,15 +62,21 @@ class Trader:
         self._running = True
         logger.info("Trader service starting...")
 
-        # Get initial bankroll
-        try:
-            balance = await self.exchange.fetch_balance()
-            self._bankroll = float(balance.get("total", {}).get("USDC", 0))
-            logger.info("Initial bankroll: {}", format_usd(self._bankroll))
-        except Exception as e:
-            logger.error("Failed to fetch initial balance: {}", e)
-            from config.settings import settings
-            self._bankroll = settings.initial_bankroll
+        # Get initial bankroll with retry
+        for attempt in range(3):
+            try:
+                balance = await self.exchange.fetch_balance()
+                self._bankroll = float(balance.get("total", {}).get("USDC", 0))
+                logger.info("Initial bankroll: {}", format_usd(self._bankroll))
+                break
+            except Exception as e:
+                logger.error("Failed to fetch initial balance (attempt {}/3): {}", attempt + 1, e)
+                if attempt < 2:
+                    await asyncio.sleep(5 * (attempt + 1))
+                else:
+                    logger.critical("Could not fetch balance after 3 attempts, using config fallback")
+                    from config.settings import settings
+                    self._bankroll = settings.initial_bankroll
 
         # Set day-start bankroll for drawdown shield
         self.risk_manager.set_bankroll_at_day_start(self._bankroll)
@@ -327,12 +333,15 @@ class Trader:
                 tp1_pct = tp_targets[0].get("pct", 0) if tp_targets else 0
                 sl_pct = decision.get("stop_loss_pct", 0)
                 entry = result["entry_price"]
+                # SL/TP pct are leveraged PnL — convert to price move
+                sl_price_pct = sl_pct / leverage
+                tp1_price_pct = tp1_pct / leverage
                 if action == "LONG":
-                    sl_price = entry * (1 - sl_pct / 100)
-                    tp1_price = entry * (1 + tp1_pct / 100)
+                    sl_price = entry * (1 - sl_price_pct / 100)
+                    tp1_price = entry * (1 + tp1_price_pct / 100)
                 else:
-                    sl_price = entry * (1 + sl_pct / 100)
-                    tp1_price = entry * (1 - tp1_pct / 100)
+                    sl_price = entry * (1 + sl_price_pct / 100)
+                    tp1_price = entry * (1 - tp1_price_pct / 100)
                 await self._telegram.notify_trade_open(
                     signal.token, action, entry, leverage, sl_price, tp1_price, size_pct,
                 )
