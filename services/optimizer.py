@@ -16,6 +16,10 @@ class Optimizer:
         self.ai_brain = ai_brain
         self.db = db
         self._running = False
+        self._health_monitor = None
+
+    def set_health_monitor(self, health_monitor) -> None:
+        self._health_monitor = health_monitor
 
     async def start(self) -> None:
         self._running = True
@@ -26,7 +30,13 @@ class Optimizer:
         logger.info("Optimizer starting (interval: {}h, min trades: {})", interval_hours, min_trades)
 
         while self._running:
-            await asyncio.sleep(interval_hours * 3600)
+            # Heartbeat every 60s during the long sleep
+            for _ in range(interval_hours * 3600 // 60):
+                if not self._running:
+                    break
+                if self._health_monitor:
+                    self._health_monitor.heartbeat("optimizer")
+                await asyncio.sleep(60)
             if not self._running:
                 break
 

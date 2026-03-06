@@ -141,6 +141,9 @@ async def main() -> None:
     health_monitor.set_exchange(exchange)
     health_monitor.set_db(db)
     data_collector.set_health_monitor(health_monitor)
+    trader.set_health_monitor(health_monitor)
+    optimizer.set_health_monitor(health_monitor)
+    telegram_bot.set_health_monitor(health_monitor)
 
     # 6. API key expiry warning (Hyperliquid keys valid 180 days)
     _log_api_key_reminder()

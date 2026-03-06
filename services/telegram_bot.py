@@ -20,6 +20,10 @@ class TelegramBot:
         self._position_manager = None
         self._db = None
         self._running = False
+        self._health_monitor = None
+
+    def set_health_monitor(self, health_monitor) -> None:
+        self._health_monitor = health_monitor
 
     def set_components(self, trader, optimizer, risk_manager, position_manager, db) -> None:
         self._trader = trader
@@ -55,8 +59,14 @@ class TelegramBot:
         await self.send_message("Trading Bot gestartet!")
 
         # Keep running
+        _tg_hb_counter = 0
         while self._running:
             await asyncio.sleep(1)
+            _tg_hb_counter += 1
+            if _tg_hb_counter >= 60:
+                _tg_hb_counter = 0
+                if self._health_monitor:
+                    self._health_monitor.heartbeat("telegram")
 
     async def stop(self) -> None:
         self._running = False
