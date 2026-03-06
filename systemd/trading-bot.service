@@ -7,9 +7,9 @@ Wants=network-online.target
 Type=simple
 User=trading
 Group=trading
-WorkingDirectory=/home/trading/hyperliquid-bot
-EnvironmentFile=/home/trading/hyperliquid-bot/.env
-ExecStart=/home/trading/hyperliquid-bot/.venv/bin/python main.py
+WorkingDirectory=/home/trading/tradingbot
+EnvironmentFile=/home/trading/tradingbot/.env
+ExecStart=/home/trading/tradingbot/.venv/bin/python main.py
 Restart=always
 RestartSec=10
 StandardOutput=journal
@@ -19,7 +19,7 @@ SyslogIdentifier=trading-bot
 # Security hardening
 NoNewPrivileges=yes
 ProtectSystem=strict
-ReadWritePaths=/home/trading/hyperliquid-bot
+ReadWritePaths=/home/trading/tradingbot
 
 # Resource limits
 LimitNOFILE=65536
