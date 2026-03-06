@@ -90,10 +90,9 @@ class RiskManager:
             return 1.0, 0
 
         tiers = shield_config.get("tiers", [
-            {"drawdown_pct": -3.0, "size_multiplier": 1.0},
-            {"drawdown_pct": -5.0, "size_multiplier": 0.5},
-            {"drawdown_pct": -7.0, "size_multiplier": 0.25},
-            {"drawdown_pct": -8.0, "size_multiplier": 0.0},
+            {"drawdown_pct": -3.0, "size_multiplier": 0.5},
+            {"drawdown_pct": -5.0, "size_multiplier": 0.25},
+            {"drawdown_pct": -7.0, "size_multiplier": 0.0},
         ])
 
         # Validate tiers are sorted descending by drawdown_pct

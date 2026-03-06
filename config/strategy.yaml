@@ -75,10 +75,9 @@ risk:
   drawdown_shield:
     enabled: true
     tiers:
-      - { drawdown_pct: -3.0, size_multiplier: 1.0 }    # Normal
-      - { drawdown_pct: -5.0, size_multiplier: 0.5 }    # Half size
-      - { drawdown_pct: -7.0, size_multiplier: 0.25 }   # Quarter size
-      - { drawdown_pct: -8.0, size_multiplier: 0.0 }    # Full pause
+      - { drawdown_pct: -3.0, size_multiplier: 0.5 }    # Below -3% = Half size
+      - { drawdown_pct: -5.0, size_multiplier: 0.25 }   # Below -5% = Quarter size
+      - { drawdown_pct: -7.0, size_multiplier: 0.0 }    # Below -7% = Full pause
     pause_duration_hours: 4
     reset_time_utc: "00:00"
   max_total_drawdown_pct: 20.0
