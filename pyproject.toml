@@ -26,6 +26,9 @@ linux = ["uvloop>=0.21.0"]
 [project.scripts]
 trading-bot = "main:main_entry"
 
+[tool.setuptools]
+packages = ["core", "config", "storage", "services", "utils"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
