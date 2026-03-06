@@ -18,6 +18,55 @@ def main_entry() -> None:
     asyncio.run(main())
 
 
+def _log_api_key_reminder() -> None:
+    """Log a reminder about API key expiry on startup."""
+    logger.info(
+        "Reminder: Hyperliquid API keys expire after 180 days. "
+        "Rotate your key regularly to avoid unexpected failures."
+    )
+
+
+async def _reconcile_positions(exchange, db) -> None:
+    """Reconcile DB open trades with actual exchange positions on startup."""
+    try:
+        exchange_positions = await exchange.fetch_positions()
+        exchange_open_orders = await exchange.fetch_open_orders()
+
+        # Get tokens with actual positions on exchange
+        live_tokens = set()
+        for pos in exchange_positions:
+            contracts = abs(float(pos.get("contracts", 0) or 0))
+            if contracts > 0:
+                symbol = pos.get("symbol", "")
+                base = symbol.split("/")[0] if "/" in symbol else ""
+                if base:
+                    live_tokens.add(base)
+
+        # Check DB open trades against exchange state
+        db_open = await db.get_open_trades()
+        for trade in db_open:
+            token = trade["token"]
+            if token not in live_tokens:
+                logger.warning(
+                    "Stale DB trade #{} {} {} not found on exchange, closing as reconciled",
+                    trade["id"], trade["direction"], token,
+                )
+                await db.close_trade(
+                    trade["id"], trade["entry_price"], 0.0, 0.0, 0.0, "reconcile_startup",
+                )
+
+        # Log any exchange orders found
+        if exchange_open_orders:
+            logger.info("Found {} open orders on exchange at startup", len(exchange_open_orders))
+
+        logger.info(
+            "Position reconciliation complete: {} exchange positions, {} DB open trades",
+            len(live_tokens), len(db_open),
+        )
+    except Exception as e:
+        logger.warning("Position reconciliation failed (non-fatal): {}", e)
+
+
 async def main() -> None:
     logger.info("=" * 60)
     logger.info("Hyperliquid Trading Bot Starting...")
@@ -37,6 +86,14 @@ async def main() -> None:
     from services.optimizer import Optimizer
     from services.telegram_bot import TelegramBot
     from services.health_monitor import HealthMonitor
+
+    # 0. Mainnet safety gate
+    if settings.network == "mainnet" and not settings.is_mainnet_confirmed:
+        logger.critical(
+            "MAINNET mode requires CONFIRM_MAINNET=true in .env. "
+            "This is a safety measure to prevent accidental mainnet trading. Exiting."
+        )
+        return
 
     # 1. Load config
     strategy = load_strategy()
@@ -59,7 +116,10 @@ async def main() -> None:
         await db.close()
         return
 
-    # 4. Initialize components
+    # 4. Reconcile positions on startup
+    await _reconcile_positions(exchange, db)
+
+    # 5. Initialize components
     market_data = MarketData(exchange, db)
     signal_engine = SignalEngine(exchange, market_data, db)
     ai_brain = AIBrain(db)
@@ -76,9 +136,16 @@ async def main() -> None:
     # Wire up telegram with components
     telegram_bot.set_components(trader, optimizer, risk_manager, position_manager, db)
     trader.set_telegram(telegram_bot)
+    ai_brain.set_telegram(telegram_bot)
     health_monitor.set_telegram(telegram_bot)
+    health_monitor.set_exchange(exchange)
+    health_monitor.set_db(db)
+    data_collector.set_health_monitor(health_monitor)
 
-    # 5. Setup graceful shutdown
+    # 6. API key expiry warning (Hyperliquid keys valid 180 days)
+    _log_api_key_reminder()
+
+    # 7. Setup graceful shutdown
     shutdown_event = asyncio.Event()
 
     def _shutdown_handler(sig, frame):

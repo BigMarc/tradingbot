@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS trades (
     exit_time REAL,
     exit_reason TEXT,
     ai_reasoning TEXT,
+    slippage_pct REAL DEFAULT 0,
     status TEXT DEFAULT 'open'
 );
 CREATE INDEX IF NOT EXISTS idx_trades_status ON trades(status);
@@ -187,11 +188,11 @@ class Database:
 
     # ── Trades ───────────────────────────────────────────────
 
-    async def insert_trade(self, token: str, direction: str, entry_price: float, leverage: float, size_usd: float, ai_reasoning: str = "") -> int:
+    async def insert_trade(self, token: str, direction: str, entry_price: float, leverage: float, size_usd: float, ai_reasoning: str = "", slippage_pct: float = 0.0) -> int:
         cursor = await self.db.execute(
-            """INSERT INTO trades (token, direction, entry_price, leverage, size_usd, entry_time, ai_reasoning, status)
-               VALUES (?, ?, ?, ?, ?, ?, ?, 'open')""",
-            (token, direction, entry_price, leverage, size_usd, time.time(), ai_reasoning),
+            """INSERT INTO trades (token, direction, entry_price, leverage, size_usd, entry_time, ai_reasoning, slippage_pct, status)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open')""",
+            (token, direction, entry_price, leverage, size_usd, time.time(), ai_reasoning, slippage_pct),
         )
         await self.db.commit()
         return cursor.lastrowid  # type: ignore
@@ -285,6 +286,15 @@ class Database:
         day_start = time.time() - (time.time() % 86400)
         cursor = await self.db.execute(
             "SELECT COALESCE(SUM(cost_usd), 0) as total FROM api_costs WHERE timestamp >= ?",
+            (day_start,),
+        )
+        row = await cursor.fetchone()
+        return row["total"]  # type: ignore
+
+    async def get_today_trading_fees(self) -> float:
+        day_start = time.time() - (time.time() % 86400)
+        cursor = await self.db.execute(
+            "SELECT COALESCE(SUM(fees), 0) as total FROM trades WHERE exit_time >= ? AND status = 'closed'",
             (day_start,),
         )
         row = await cursor.fetchone()

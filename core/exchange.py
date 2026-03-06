@@ -114,5 +114,9 @@ class Exchange:
         return await asyncio.to_thread(self.exchange.cancel_all_orders, symbol)
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), retry=retry_if_exception_type(ccxt.NetworkError))
+    async def fetch_open_orders(self, symbol: str | None = None) -> list:
+        return await asyncio.to_thread(self.exchange.fetch_open_orders, symbol)
+
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), retry=retry_if_exception_type(ccxt.NetworkError))
     async def set_leverage(self, leverage: int, symbol: str) -> None:
         await asyncio.to_thread(self.exchange.set_leverage, leverage, symbol)

@@ -117,6 +117,10 @@ class AIBrain:
     def __init__(self, db: Database) -> None:
         self.db = db
         self.client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        self._telegram = None
+
+    def set_telegram(self, telegram_bot) -> None:
+        self._telegram = telegram_bot
 
     async def evaluate_signal(
         self,
@@ -156,6 +160,23 @@ class AIBrain:
             return None
         except anthropic.RateLimitError:
             logger.warning("AI Brain rate limited, skipping trade")
+            return None
+        except anthropic.AuthenticationError as e:
+            logger.critical("Anthropic API key invalid or expired! {}", e)
+            if self._telegram:
+                await self._telegram.notify_alert(
+                    "Anthropic API Key ungueltig oder abgelaufen! "
+                    "Bot kann keine AI-Entscheidungen treffen. "
+                    "Bitte API Key pruefen und erneuern."
+                )
+            return None
+        except anthropic.PermissionDeniedError as e:
+            logger.critical("Anthropic API permission denied (billing?): {}", e)
+            if self._telegram:
+                await self._telegram.notify_alert(
+                    "Anthropic API Zugriff verweigert (Billing-Problem?). "
+                    "Bitte Account-Status pruefen."
+                )
             return None
         except Exception as e:
             logger.error("AI Brain error: {}", e)

@@ -16,6 +16,10 @@ class DataCollector:
         self.market_data = market_data
         self.db = db
         self._running = False
+        self._health_monitor = None
+
+    def set_health_monitor(self, health_monitor) -> None:
+        self._health_monitor = health_monitor
 
     async def start(self) -> None:
         self._running = True
@@ -41,10 +45,17 @@ class DataCollector:
     async def _run_websocket(self) -> None:
         """WebSocket price feed - runs continuously."""
         while self._running:
+            # Pause during exchange maintenance
+            if self._health_monitor and self._health_monitor.is_maintenance_mode:
+                logger.debug("Maintenance mode active, pausing WebSocket reconnect")
+                await asyncio.sleep(30)
+                continue
             try:
                 await self.market_data.start()
             except Exception as e:
                 logger.error("WebSocket feed error: {}", e)
+                if self._health_monitor:
+                    self._health_monitor.record_ws_disconnect()
                 if self._running:
                     await asyncio.sleep(5)
 
@@ -55,6 +66,10 @@ class DataCollector:
                 await asyncio.sleep(300)  # 5 minutes
                 if not self._running:
                     break
+                # Skip during maintenance
+                if self._health_monitor and self._health_monitor.is_maintenance_mode:
+                    logger.debug("Maintenance mode, skipping REST fetch")
+                    continue
                 data = await self.market_data.fetch_rest_data()
                 logger.debug("REST data fetched for {} tokens", len(data))
             except asyncio.CancelledError:

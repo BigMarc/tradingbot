@@ -68,9 +68,15 @@ class OrderExecutor:
         fees = order.get("fee", {}).get("cost", 0) or 0
         order_id = order.get("id", "")
 
+        # Slippage tracking
+        expected_price = current_price
+        slippage_pct = 0.0
+        if fill_price and fill_price > 0 and expected_price > 0:
+            slippage_pct = abs(fill_price - expected_price) / expected_price * 100
+
         logger.info(
-            "OPENED {} {} | Price: {} | Amount: {} | Size: ${:.2f} | Leverage: {}x | Fees: ${:.4f}",
-            direction, token, fill_price, amount, size_usd, leverage, fees,
+            "OPENED {} {} | Price: {} | Amount: {} | Size: ${:.2f} | Leverage: {}x | Fees: ${:.4f} | Slippage: {:.4f}%",
+            direction, token, fill_price, amount, size_usd, leverage, fees, slippage_pct,
         )
 
         # Record in database
@@ -81,6 +87,7 @@ class OrderExecutor:
             leverage=leverage,
             size_usd=size_usd,
             ai_reasoning=ai_reasoning,
+            slippage_pct=slippage_pct,
         )
 
         return {
@@ -89,6 +96,8 @@ class OrderExecutor:
             "token": token,
             "direction": direction,
             "entry_price": fill_price or current_price,
+            "expected_price": expected_price,
+            "slippage_pct": slippage_pct,
             "amount": amount,
             "size_usd": size_usd,
             "leverage": leverage,

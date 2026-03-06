@@ -27,8 +27,15 @@ class Settings(BaseSettings):
     # Network
     network: str = Field(default="testnet")
 
+    # Mainnet safety: must be "true" to place orders on mainnet
+    confirm_mainnet: str = Field(default="")
+
     # Bankroll
     initial_bankroll: float = Field(default=1000.0)
+
+    @property
+    def is_mainnet_confirmed(self) -> bool:
+        return self.network != "mainnet" or self.confirm_mainnet.lower() == "true"
 
 
 def load_strategy() -> dict[str, Any]:

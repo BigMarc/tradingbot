@@ -115,15 +115,24 @@ class TelegramBot:
         )
         await self.send_message(text)
 
-    async def send_daily_summary(self, stats: dict, api_costs: float) -> None:
+    async def send_daily_summary(self, stats: dict, api_costs: float, trading_fees: float = 0) -> None:
+        gross_pnl = stats.get('total_pnl', 0)
+        net_pnl = gross_pnl - trading_fees - api_costs
         text = (
             f"\U0001f4c5 <b>Daily Summary</b>\n"
             f"Trades: {stats.get('total_trades', 0)}\n"
-            f"Win Rate: {stats.get('win_rate', 0):.1f}%\n"
-            f"PnL: {format_usd(stats.get('total_pnl', 0))}\n"
-            f"Fees: {format_usd(stats.get('total_fees', 0))}\n"
-            f"AI Kosten: {format_usd(api_costs)}"
+            f"Win Rate: {stats.get('win_rate', 0):.1f}%\n\n"
+            f"<b>PnL Breakdown:</b>\n"
+            f"  Gross PnL: {format_usd(gross_pnl)}\n"
+            f"  Trading Fees: -{format_usd(trading_fees)}\n"
+            f"  AI Kosten: -{format_usd(api_costs)}\n"
+            f"  <b>Net PnL: {format_usd(net_pnl)}</b>"
         )
+        if stats.get("consecutive_loss_days", 0) >= 3:
+            text += (
+                f"\n\n\u26a0\ufe0f <b>Warnung:</b> {stats['consecutive_loss_days']} "
+                f"negative Tage in Folge!"
+            )
         await self.send_message(text)
 
     # ── Command Handlers ─────────────────────────────────────
