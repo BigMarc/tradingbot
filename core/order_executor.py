@@ -201,7 +201,19 @@ class OrderExecutor:
     async def cancel_all_open_orders(self) -> None:
         """Cancel all open orders on the exchange."""
         try:
-            await self.exchange.cancel_all_orders()
-            logger.info("Cancelled all open orders")
+            open_orders = await self.exchange.fetch_open_orders()
+            if not open_orders:
+                logger.debug("No open orders to cancel")
+                return
+
+            # Group by symbol and cancel per symbol (Hyperliquid requirement)
+            symbols = {order["symbol"] for order in open_orders if order.get("symbol")}
+            for symbol in symbols:
+                try:
+                    await self.exchange.cancel_all_orders(symbol)
+                except Exception as e:
+                    logger.warning("Failed to cancel orders for {}: {}", symbol, e)
+
+            logger.info("Cancelled open orders across {} symbols", len(symbols))
         except Exception as e:
-            logger.error("Failed to cancel all orders: {}", e)
+            logger.error("Failed to cancel orders: {}", e)
