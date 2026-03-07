@@ -1,0 +1,28 @@
+[Unit]
+Description=Hyperliquid Trading Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=user
+Group=user
+WorkingDirectory=/home/user/tradingbot
+EnvironmentFile=/home/user/tradingbot/.env
+ExecStart=/usr/local/bin/python3 -m main
+Restart=on-failure
+RestartSec=10
+StartLimitBurst=5
+StartLimitIntervalSec=300
+
+# Graceful shutdown (SIGTERM → bot cancels orders, cleans up)
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=tradingbot
+
+[Install]
+WantedBy=multi-user.target
