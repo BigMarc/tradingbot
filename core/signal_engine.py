@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from config.settings import load_strategy, load_blacklist
 from core.exchange import Exchange
 from core.market_data import MarketData
-from core.indicators import compute_indicators, compute_signal_score
+from core.indicators import compute_indicators, compute_signal_score, debug_signal_score
 from storage.database import Database
 from utils.logger import logger
 
@@ -161,12 +161,14 @@ class SignalEngine:
             funding_rate = rest_info.get("funding_rate", 0) or 0
             funding_annualized = rest_info.get("funding_annualized_pct", 0)
 
-            # Get candles and compute indicators
-            candles = await self.db.get_candles(token, "1m", limit=300)
-            if len(candles) < 50:
+            # Get 5m candles for stable indicators (pre-loaded on startup)
+            candle_tf = signal_config.get("candle_timeframe", "5m")
+            candles = await self.db.get_candles(token, candle_tf, limit=300)
+            if len(candles) < 30:
                 continue
 
-            indicators = compute_indicators(candles, signal_config)
+            candle_minutes = 5 if candle_tf == "5m" else 1
+            indicators = compute_indicators(candles, signal_config, candle_minutes=candle_minutes)
             if not indicators:
                 continue
 
@@ -193,6 +195,14 @@ class SignalEngine:
                 continue
 
             indicators["funding_modifier"] = modifier
+
+            # Debug: log score breakdown for top candidates
+            if raw_score >= min_score * 0.6:
+                breakdown = debug_signal_score(indicators, signal_config)
+                logger.debug(
+                    "Score breakdown {} {}: {} | Total: {:.1f} (need {})",
+                    direction, token, breakdown, final_score, min_score,
+                )
 
             if final_score >= min_score:
                 confidence = min(final_score / 100.0, 0.95)

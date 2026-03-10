@@ -34,6 +34,9 @@ class DataCollector:
         self.market_data.update_subscribed_tokens(tokens[:20])
         logger.info("Subscribing to {} tokens", min(len(tokens), 20))
 
+        # Pre-load historical candles so signals work immediately
+        await self._preload_historical_candles(tokens[:20])
+
         # Run tasks concurrently
         await asyncio.gather(
             self._run_websocket(),
@@ -42,6 +45,25 @@ class DataCollector:
             self._run_cleanup(),
             self._run_heartbeat(),
         )
+
+    async def _preload_historical_candles(self, tokens: list[str]) -> None:
+        """Fetch historical 5m candles from exchange REST API so indicators work immediately."""
+        logger.info("Pre-loading historical 5m candles for {} tokens...", len(tokens))
+        loaded = 0
+        for token in tokens:
+            symbol = f"{token}/USDC:USDC"
+            try:
+                ohlcv = await self.exchange.fetch_ohlcv(symbol, timeframe="5m", limit=300)
+                for candle in ohlcv:
+                    ts, o, h, l, c, v = candle[0] / 1000, candle[1], candle[2], candle[3], candle[4], candle[5]
+                    await self.db.upsert_candle(token, "5m", ts, o, h, l, c, v)
+                loaded += 1
+                logger.debug("Loaded {} 5m candles for {}", len(ohlcv), token)
+            except Exception as e:
+                logger.warning("Failed to preload candles for {}: {}", token, e)
+            # Small delay to avoid rate limits
+            await asyncio.sleep(0.3)
+        logger.info("Historical candle preload complete: {}/{} tokens loaded", loaded, len(tokens))
 
     async def stop(self) -> None:
         self._running = False
