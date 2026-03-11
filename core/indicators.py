@@ -6,12 +6,17 @@ import numpy as np
 from utils.logger import logger
 
 
-def compute_indicators(candles: list[dict], strategy_config: dict) -> dict:
+def compute_indicators(candles: list[dict], strategy_config: dict, candle_minutes: int = 1) -> dict:
     """Compute all technical indicators from OHLCV candles.
+
+    Args:
+        candles: List of OHLCV candle dicts.
+        strategy_config: Signal strategy configuration.
+        candle_minutes: Minutes per candle (1 for 1m, 5 for 5m, etc.).
 
     Returns a dict with all indicator values for signal scoring.
     """
-    if len(candles) < 50:
+    if len(candles) < 30:
         return {}
 
     df = pd.DataFrame(candles)
@@ -25,7 +30,7 @@ def compute_indicators(candles: list[dict], strategy_config: dict) -> dict:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
     df.dropna(subset=["close"], inplace=True)
-    if len(df) < 50:
+    if len(df) < 30:
         return {}
 
     result: dict = {}
@@ -115,7 +120,7 @@ def compute_indicators(candles: list[dict], strategy_config: dict) -> dict:
 
     # Momentum (price change percentages)
     for minutes in strategy_config.get("momentum", {}).get("lookback_periods", [15, 60, 240]):
-        bars = min(minutes, len(df) - 1)
+        bars = min(minutes // max(candle_minutes, 1), len(df) - 1)
         if bars > 0:
             old_price = float(df["close"].iloc[-bars - 1])
             if old_price > 0:
@@ -158,11 +163,11 @@ def compute_signal_score(indicators: dict, strategy_config: dict) -> tuple[float
     pct_60m = indicators.get("pct_60m", 0)
     pct_240m = indicators.get("pct_240m", 0)
 
-    # Strong moves get higher scores
+    # Recalibrated: 1.5% weighted avg move = max score (was 3% — unreachable)
     avg_momentum = (abs(pct_15m) * 3 + abs(pct_60m) * 2 + abs(pct_240m)) / 6
-    momentum_raw = min(avg_momentum / 3.0, 1.0)  # Normalize: 3% avg move = max
+    momentum_raw = min(avg_momentum / 1.5, 1.0)
 
-    obv_boost = 0.1 if indicators.get("obv_trend") == "RISING" else -0.1
+    obv_boost = 0.1 if indicators.get("obv_trend") == "RISING" else -0.05
     momentum_raw = max(0, min(1, momentum_raw + obv_boost))
     momentum_score = momentum_raw * weights["momentum"]
 
@@ -170,30 +175,48 @@ def compute_signal_score(indicators: dict, strategy_config: dict) -> tuple[float
     short_momentum = pct_15m * 3 + pct_60m * 2 + pct_240m
     direction = "LONG" if short_momentum > 0 else "SHORT"
 
-    # Trend Score (0-30)
+    # Trend Score (0-30) — more granular, not just binary
     trend_raw = 0.0
     ema_alignment = indicators.get("ema_alignment", "MIXED")
     macd_trend = indicators.get("macd_trend", "FLAT")
     macd_hist = indicators.get("macd_hist", 0)
+    adx = indicators.get("adx", 20)
 
     if direction == "LONG":
         if ema_alignment == "BULLISH":
-            trend_raw += 0.5
+            trend_raw += 0.4
+        elif ema_alignment == "MIXED":
+            # Partial credit: if EMA9 > EMA21 (short-term trend aligns)
+            ema9 = indicators.get("ema_9", 0)
+            ema21 = indicators.get("ema_21", 0)
+            if ema9 > ema21:
+                trend_raw += 0.2
         if macd_hist > 0:
-            trend_raw += 0.25
+            trend_raw += 0.2
         if macd_trend == "RISING":
-            trend_raw += 0.25
+            trend_raw += 0.2
     else:
         if ema_alignment == "BEARISH":
-            trend_raw += 0.5
+            trend_raw += 0.4
+        elif ema_alignment == "MIXED":
+            ema9 = indicators.get("ema_9", 0)
+            ema21 = indicators.get("ema_21", 0)
+            if ema9 < ema21:
+                trend_raw += 0.2
         if macd_hist < 0:
-            trend_raw += 0.25
+            trend_raw += 0.2
         if macd_trend == "FALLING":
-            trend_raw += 0.25
+            trend_raw += 0.2
+
+    # ADX bonus: strong trend = more confidence
+    if adx > 25:
+        trend_raw += 0.2
+    elif adx > 20:
+        trend_raw += 0.1
 
     trend_score = min(1.0, trend_raw) * weights["trend"]
 
-    # Mean Reversion Score (0-20)
+    # Mean Reversion Score (0-20) — wider RSI bands for crypto
     mr_raw = 0.0
     rsi = indicators.get("rsi", 50)
     bb_pos = indicators.get("bb_position", 0.5)
@@ -203,27 +226,36 @@ def compute_signal_score(indicators: dict, strategy_config: dict) -> tuple[float
     if direction == "LONG":
         if rsi < rsi_oversold:
             mr_raw += 0.5
-        elif rsi < 45:
-            mr_raw += 0.25
+        elif rsi < 40:
+            mr_raw += 0.3
+        elif rsi < 50:
+            mr_raw += 0.15
         if bb_pos < 0.2:
             mr_raw += 0.5
-        elif bb_pos < 0.4:
-            mr_raw += 0.25
+        elif bb_pos < 0.35:
+            mr_raw += 0.3
+        elif bb_pos < 0.5:
+            mr_raw += 0.15
     else:
         if rsi > rsi_overbought:
             mr_raw += 0.5
-        elif rsi > 55:
-            mr_raw += 0.25
+        elif rsi > 60:
+            mr_raw += 0.3
+        elif rsi > 50:
+            mr_raw += 0.15
         if bb_pos > 0.8:
             mr_raw += 0.5
-        elif bb_pos > 0.6:
-            mr_raw += 0.25
+        elif bb_pos > 0.65:
+            mr_raw += 0.3
+        elif bb_pos > 0.5:
+            mr_raw += 0.15
 
     mr_score = min(1.0, mr_raw) * weights["mean_reversion"]
 
-    # Volume Score (0-20)
+    # Volume Score (0-20) — use 24h volume from REST as fallback
     vol_raw = 0.0
     vol_ratio = indicators.get("volume_ratio", 1.0)
+    vol_24h = indicators.get("volume_24h", 0)
     vol_threshold = strategy_config.get("volume", {}).get("ratio_threshold", 1.5)
 
     if vol_ratio >= vol_threshold * 2:
@@ -232,8 +264,38 @@ def compute_signal_score(indicators: dict, strategy_config: dict) -> tuple[float
         vol_raw = 0.6
     elif vol_ratio >= 1.0:
         vol_raw = 0.3
+    elif vol_ratio <= 0.01 and vol_24h > 0:
+        # Volume ratio is broken (WebSocket volume missing) — use 24h volume as proxy
+        # If the token has decent 24h volume, give baseline score
+        if vol_24h >= 10_000_000:
+            vol_raw = 0.6
+        elif vol_24h >= 1_000_000:
+            vol_raw = 0.4
 
     volume_score = vol_raw * weights["volume"]
 
     total_score = momentum_score + trend_score + mr_score + volume_score
     return round(total_score, 2), direction
+
+
+def debug_signal_score(indicators: dict, strategy_config: dict) -> str:
+    """Return a human-readable breakdown of score components."""
+    weights = strategy_config.get("weights", {"momentum": 30, "trend": 30, "mean_reversion": 20, "volume": 20})
+
+    pct_15m = indicators.get("pct_15m", 0)
+    pct_60m = indicators.get("pct_60m", 0)
+    pct_240m = indicators.get("pct_240m", 0)
+    avg_mom = (abs(pct_15m) * 3 + abs(pct_60m) * 2 + abs(pct_240m)) / 6
+    mom_score = min(avg_mom / 1.5, 1.0) * weights["momentum"]
+
+    rsi = indicators.get("rsi", 50)
+    ema_align = indicators.get("ema_alignment", "MIXED")
+    adx = indicators.get("adx", 20)
+    vol_ratio = indicators.get("volume_ratio", 1.0)
+    bb_pos = indicators.get("bb_position", 0.5)
+
+    return (
+        f"Mom:{mom_score:.0f}/{weights['momentum']} "
+        f"(15m:{pct_15m:+.2f}% 1h:{pct_60m:+.2f}% 4h:{pct_240m:+.2f}%) | "
+        f"RSI:{rsi:.0f} EMA:{ema_align} ADX:{adx:.0f} BB:{bb_pos:.2f} VolR:{vol_ratio:.1f}"
+    )
